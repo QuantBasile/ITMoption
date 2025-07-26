@@ -1,0 +1,4 @@
+bokeh>=3.0.0
+QuantLib-Python>=1.29
+numpy>=1.20
+
