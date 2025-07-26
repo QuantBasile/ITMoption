@@ -14,6 +14,11 @@ import numpy as np
 import datetime
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, DataTable, TableColumn
+from bokeh.models import HTMLTemplateFormatter
+
+html_formatter = HTMLTemplateFormatter(template='<div style="text-align:right; font-family: monospace;"><%= value %></div>')
+
+
 
 # Inputs ------------------------------------------------------------------------------------------------------------------------
 desc_spot = Div(text="The current price of the underlying asset", width=300, visible=False)
@@ -181,6 +186,85 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
 
     return option.NPV(), adjusted_spot.value()
 
+def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, maturity_date, timeSteps, vol_pre, div_date):
+    """
+    Computes a matrix of option prices for different implied volatilities (IVs) and underlying prices.
+    - Option prices are formatted with fixed-width (8 characters, 2 decimals) so decimals align.
+    - The column corresponding to the pre-dividend IV (closest match) is colored blue and bold.
+    - The row corresponding to the ex-tag underlying price (S_after, with no change) is colored blue and bold.
+    """
+    calendar = ql.TARGET()
+    day_count = ql.Actual365Fixed()
+
+    # Define the ranges:
+    implied_volas = np.arange(0.10, 0.85, 0.05)  # IV from 0.10 to 0.80
+    spot_changes = np.arange(-0.20, 0.225, 0.025)  # Variation from -20% to +20%
+    
+    # Calculate S_after: underlying price on the ex-tag day (if no shock occurs)
+    div_time = day_count.yearFraction(eval_date, div_date)
+    S_after = spot * np.exp(r * div_time) - div_amount
+
+    # Now compute underlying values based on S_after instead of the initial spot
+    underlying_values = [S_after * (1 + change) for change in spot_changes]
+
+    # Build initial data dictionary with fixed-width formatting.
+    matrix_data = {}
+    matrix_data["IV ↓ / Spot →"] = [f"{S:8.2f}" for S in underlying_values]
+    
+    # Determine which row corresponds to S_after (i.e. no change, ideally change==0)
+    differences = [abs(S - S_after) for S in underlying_values]
+    closest_idx = int(np.argmin(differences))
+    row_bold = [i == closest_idx for i in range(len(underlying_values))]
+    matrix_data["row_bold"] = row_bold  # temporary key for formatting
+
+    # For each implied volatility, compute option prices.
+    for vol in implied_volas:
+        col_key = f"IV {vol:.2f}"
+        prices = []
+        for S in underlying_values:
+            # Compute the option price at t=0 (post-dividend evaluation)
+            option_price, _ = compute_option_price(vol, eval_date, 0, eval_date, "cont", eval_date, S, shock, r, div_amount, strike, maturity_date, timeSteps)
+            prices.append(f"{option_price:8.2f}")  # fixed-width format with 2 decimals
+        matrix_data[col_key] = prices
+
+    # Bold and color the column corresponding to the pre-dividend IV.
+    iv_keys = [key for key in matrix_data if key.startswith("IV") and "↓" not in key]
+    pre_vol_str = f"IV {vol_pre:.2f}"
+    if pre_vol_str not in matrix_data and iv_keys:
+        pre_vol_str = min(iv_keys, key=lambda k: abs(float(k.split()[1]) - vol_pre))
+    if pre_vol_str in matrix_data:
+        matrix_data[pre_vol_str] = [f"<span style='color:blue; font-weight:bold;'>{val}</span>" for val in matrix_data[pre_vol_str]]
+
+    # Bold and color the row where the underlying equals S_after.
+    for key in list(matrix_data.keys()):
+        if key == "row_bold":
+            continue
+        new_col = []
+        for i, val in enumerate(matrix_data[key]):
+            if matrix_data["row_bold"][i]:
+                new_col.append(f"<span style='color:blue; font-weight:bold;'>{val}</span>")
+            else:
+                new_col.append(val)
+        matrix_data[key] = new_col
+
+    # Remove the temporary key.
+    matrix_data.pop("row_bold")
+    
+    return matrix_data
+
+
+# ColumnDataSource for PostDividend Matrix
+post_div_source = ColumnDataSource(data={"IV ↓ / Spot →": []})  # Initially empty
+
+# Create table columns dynamically
+post_div_columns = [TableColumn(field="IV ↓ / Spot →", title="IV ↓ / Spot →")]
+for vol in np.arange(0.10, 0.85, 0.05):
+    post_div_columns.append(TableColumn(field=f"IV {vol:.2f}", title=f"IV {vol:.2f}"))
+
+# Create the DataTable for PostDividend Matrix
+post_div_table = DataTable(source=post_div_source, columns=post_div_columns, width=1200, height=400)
+
+
 def start_calculation():
     # Read parameters from widgets
     spot = spot_input.value
@@ -255,6 +339,20 @@ def start_calculation():
         portfolio_value = max(opt_price, immediate_ex) * num_stocks
         portfolio_values.append(portfolio_value)
         
+    # Compute the PostDividend Matrix
+    post_div_matrix = compute_post_div_matrix(today, spot, shock, r, div_amount, strike, maturity_date, timeSteps, vol_pre, div_date)
+    post_div_source.data = post_div_matrix  # Update the table source
+    
+    post_div_source.data = post_div_matrix
+
+    cols = []
+    for key in list(post_div_matrix.keys()):
+        cols.append(TableColumn(field=key, title=key, formatter=html_formatter))
+    post_div_table.columns = cols
+
+
+    
+    
     py_dates = [datetime.date(d.year(), d.month(), d.dayOfMonth()) for d in dates]   
     py_dates_dt = [datetime.datetime.combine(d, datetime.time.min) for d in py_dates]
     
@@ -306,13 +404,58 @@ def start_calculation():
     ]
     data_table = DataTable(source=source, columns=columns, width=1200, height=400)
     
+    #new table------------------------------------------------------------------------------------------------
+    # Convert simulation dates to Python dates
+    py_dates = [datetime.date(d.year(), d.month(), d.dayOfMonth()) for d in dates]
+
+    # Define the 4 key dates:
+    calc_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+    div_py = datetime.date(div_date.year(), div_date.month(), div_date.dayOfMonth())
+    maturity_py = datetime.date(maturity_date.year(), maturity_date.month(), maturity_date.dayOfMonth())
+    ex_tag_minus1_qldate = calendar.advance(div_date, ql.Period(-1, ql.Days))
+    ex_tag_minus1 = datetime.date(ex_tag_minus1_qldate.year(), ex_tag_minus1_qldate.month(), ex_tag_minus1_qldate.dayOfMonth())
+
+    # Identify indices corresponding to these dates
+    indices = [i for i, d in enumerate(py_dates) if d in [calc_date, ex_tag_minus1, div_py, maturity_py]]
+
+    # Build the reduced data dictionary using only these indices
+    reduced_data = {key: [vals[i] for i in indices] for key, vals in data.items()}
+
+    # Create a global data source (defaulting to reduced view)
+    global table_source
+    table_source = ColumnDataSource(data=reduced_data)
+    
+    # Create a toggle button for switching table view
+    global table_toggle_button
+    table_toggle_button = Button(label="Show Full Table", button_type="primary", width=200)
+    
+    def toggle_table():
+        if table_toggle_button.label == "Show Full Table":
+            table_toggle_button.label = "Show Reduced Table"
+            table_source.data = data  # full table data
+        
+        else:
+            table_toggle_button.label = "Show Full Table"
+            table_source.data = reduced_data
+
+    table_toggle_button.on_click(toggle_table)
+
+    data_table = DataTable(source=table_source, columns=columns, width=1200, height=400)
+
+    
     # Update the plot container with the three plots and the table
-    plot_container.children = [p3, p, p2, data_table]
+    plots_column = column(p3, p, p2)
+    table_column = column(table_toggle_button, data_table, post_div_table)  # Add PostDividend table here
+    plot_container.children = [row(plots_column, table_column)]
+
+
+
 
 # Plot container for the plots and table on the right
 plot_container = column()
 
 # Controls (inputs and button) on the left
+use_single_vol_toggle.js_on_change("active", CustomJS(args=dict(vol_post=vol_post_input), code="vol_post.disabled = cb_obj.active;"))
 controls = column(inputs, use_single_vol_toggle, start_button, vol_pre_display)
 
 start_button.on_click(start_calculation)
