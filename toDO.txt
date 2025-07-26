@@ -1,0 +1,9 @@
+2️⃣ Expand Features
+
+    Add Greeks Calculation:
+
+
+    Allow CSV Export:
+
+
+    Add More Option Types: Puts
