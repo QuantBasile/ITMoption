@@ -11,6 +11,8 @@ ITMoption/
             __init__.py
             pricing.py  # Option pricing logic
             utils.py    # Date/utility functions
+    legacy/
+        ITMCall.py      #Original one-file script
     tests/
         __init__.py
         test_pricing.py # Unit tests
