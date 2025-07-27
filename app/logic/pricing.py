@@ -9,14 +9,16 @@ Created on Sat Jul 26 22:05:54 2025
 import QuantLib as ql
 import numpy as np
 
-def compute_implied_vol(target_price, eval_date, spot, strike, market_option_price, r, div_amount, div_date, maturity_date, timeSteps, engine):
+def compute_implied_vol(target_price, eval_date, spot, strike, market_option_price, r, 
+                        div_amount, div_date, maturity_date, timeSteps, engine, 
+                        exercise_type="american",option_type="call"):
     ql.Settings.instance().evaluationDate = eval_date
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
     #adjusted_spot_value = spot - div_amount * np.exp(-r * day_count.yearFraction(eval_date, div_date))
     #adjusted_spot = ql.SimpleQuote(adjusted_spot_value)
     adjusted_spot = ql.SimpleQuote(spot)
-    vol_handle = ql.SimpleQuote(0.2)
+    vol_handle = ql.SimpleQuote(0.3)
     vol_curve = ql.BlackConstantVol(eval_date, calendar, ql.QuoteHandle(vol_handle), day_count)
     bs_process = ql.BlackScholesMertonProcess(
         ql.QuoteHandle(adjusted_spot),
@@ -24,8 +26,20 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
         ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),
         ql.BlackVolTermStructureHandle(vol_curve)
     )
-    payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
-    exercise = ql.AmericanExercise(eval_date, maturity_date)
+    if option_type == "call":
+        payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
+    elif option_type == "put":
+        payoff = ql.PlainVanillaPayoff(ql.Option.Put, strike)
+    else:
+        raise ValueError("option_type must be 'call' or 'put'")
+    
+    if exercise_type == "american":
+        exercise = ql.AmericanExercise(eval_date, maturity_date)
+    elif exercise_type == "european":
+        exercise = ql.EuropeanExercise(maturity_date)
+    else:
+        raise ValueError("exercise_type must be 'american' or 'european'")
+    
     option = ql.VanillaOption(payoff, exercise)
     option.setPricingEngine(getattr(ql, 'BinomialVanillaEngine')(bs_process, engine, timeSteps))
     try:
@@ -35,7 +49,13 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
         return np.nan
 
 def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock, r, div_amount, strike, 
-                         maturity_date, timeSteps, engine, exercise_type="american"):
+                         maturity_date, timeSteps, engine, exercise_type="american",option_type="call"):
+    
+    if eval_date > maturity_date:
+        raise ValueError("Evaluation date (eval_date) cannot be after option maturity.")
+    if div_date > maturity_date:
+        raise ValueError("Dividend date (div_date) cannot be after option maturity.")
+    
     ql.Settings.instance().evaluationDate = eval_date
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
@@ -60,7 +80,14 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
         ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),       #rate free risk
         ql.BlackVolTermStructureHandle(vol_curve)
     )
-    payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
+    
+    if option_type == "call":
+        payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
+    elif option_type == "put":
+        payoff = ql.PlainVanillaPayoff(ql.Option.Put, strike)
+    else:
+        raise ValueError("option_type must be 'call' or 'put'")
+    
     if exercise_type == "american":
         exercise = ql.AmericanExercise(today, maturity_date)
     elif exercise_type == "european":
@@ -71,7 +98,8 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
     option.setPricingEngine(getattr(ql, 'BinomialVanillaEngine')(bs_process, engine, timeSteps))
     return option.NPV(), adjusted_spot.value()
 
-def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, maturity_date, timeSteps, vol_pre, div_date):
+def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, maturity_date, timeSteps, 
+                            vol_pre, div_date):
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
     implied_volas = np.arange(0.10, 0.85, 0.05)
