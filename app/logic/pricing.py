@@ -13,14 +13,15 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
     ql.Settings.instance().evaluationDate = eval_date
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
-    adjusted_spot_value = spot - div_amount * np.exp(-r * day_count.yearFraction(eval_date, div_date))
-    adjusted_spot = ql.SimpleQuote(adjusted_spot_value)
+    #adjusted_spot_value = spot - div_amount * np.exp(-r * day_count.yearFraction(eval_date, div_date))
+    #adjusted_spot = ql.SimpleQuote(adjusted_spot_value)
+    adjusted_spot = ql.SimpleQuote(spot)
     vol_handle = ql.SimpleQuote(0.2)
     vol_curve = ql.BlackConstantVol(eval_date, calendar, ql.QuoteHandle(vol_handle), day_count)
     bs_process = ql.BlackScholesMertonProcess(
         ql.QuoteHandle(adjusted_spot),
-        ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),
         ql.YieldTermStructureHandle(ql.FlatForward(eval_date, 0.0, day_count)),
+        ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),
         ql.BlackVolTermStructureHandle(vol_curve)
     )
     payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
@@ -33,7 +34,8 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
     except RuntimeError:
         return np.nan
 
-def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock, r, div_amount, strike, maturity_date, timeSteps, engine):
+def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock, r, div_amount, strike, 
+                         maturity_date, timeSteps, engine, exercise_type="american"):
     ql.Settings.instance().evaluationDate = eval_date
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
@@ -51,14 +53,20 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
     )
     adjusted_spot = ql.SimpleQuote(adjusted_spot_value)
     vol_curve = ql.BlackConstantVol(eval_date, calendar, vol, day_count)
+    print(vol)
     bs_process = ql.BlackScholesMertonProcess(
         ql.QuoteHandle(adjusted_spot),
-        ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),
         ql.YieldTermStructureHandle(ql.FlatForward(eval_date, 0.0, day_count)),
+        ql.YieldTermStructureHandle(ql.FlatForward(eval_date, r, day_count)),       #rate free risk
         ql.BlackVolTermStructureHandle(vol_curve)
     )
     payoff = ql.PlainVanillaPayoff(ql.Option.Call, strike)
-    exercise = ql.AmericanExercise(today, maturity_date)
+    if exercise_type == "american":
+        exercise = ql.AmericanExercise(today, maturity_date)
+    elif exercise_type == "european":
+        exercise = ql.EuropeanExercise(maturity_date)
+    else:
+        raise ValueError("Unknown exercise_type")
     option = ql.VanillaOption(payoff, exercise)
     option.setPricingEngine(getattr(ql, 'BinomialVanillaEngine')(bs_process, engine, timeSteps))
     return option.NPV(), adjusted_spot.value()
