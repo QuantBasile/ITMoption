@@ -50,7 +50,7 @@ maturity_date_input = DatePicker(title="Maturity Date", value="2025-12-05", min_
 use_single_vol_toggle = Toggle(label="Use Single Volatility", button_type="default", active=False)
 start_button = Button(label="Start", button_type="success", width=100)
 vol_pre_display = Div(text="", width=300)
-show_delta_surface_button = Button(label="Show Delta Surface", button_type="primary", width=200)
+
 
 
 def make_info_button(desc_div):
@@ -81,7 +81,7 @@ inputs = column(
     row_maturity_date, row_n_steps, row_timeSteps, engine_input
 )
 
-controls = column(inputs, use_single_vol_toggle, start_button, vol_pre_display,show_delta_surface_button)
+controls = column(inputs, use_single_vol_toggle, start_button, vol_pre_display)
 plot_container = column()
 
 # Export ALL widgets for callbacks.py

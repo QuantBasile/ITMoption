@@ -28,7 +28,9 @@ def setup_callbacks(controls, plot_container):
     table_toggle_button = Button(label="Show Full Table", button_type="primary", width=200)
     post_div_source = ColumnDataSource(data={"IV ↓ / Spot →": []})
     post_div_table = DataTable(source=post_div_source, columns=[], width=1200, height=400)
-       
+    
+    
+    
 
     def start_calculation():
         spot = spot_input.value
@@ -79,6 +81,8 @@ def setup_callbacks(controls, plot_container):
         adj_spot = []
         discounted_dividends = []
         stock_gains = []
+        deltas = []
+
 
         for i in range(n_steps + 1):
             d = calendar.advance(today, ql.Period(i, ql.Days))
@@ -98,16 +102,20 @@ def setup_callbacks(controls, plot_container):
             if remaining_t <= 1e-8:
                 if option_type_input.value  == "Call":
                     opt_price = max(S_t - strike, 0.0)
+                    delta = 1.0 if S_t > strike else 0.0
                 else:
                     opt_price = max(strike - S_t, 0.0)
+                    delta = -1.0 if S_t < strike else 0.0
                 adj_spot.append(spot)
             else:
-                opt_price, adjusted_spot = compute_option_price(current_vol, d, t, div_date, 
+                opt_price, adjusted_spot,delta = compute_option_price(current_vol, d, t, div_date, 
                                                                 today, spot, shock, r, div_amount, strike, 
                                                                 maturity_date, timeSteps, engine_input.value,
-                                                                exercise_input.value, option_type_input.value )
+                                                                exercise_input.value, option_type_input.value,
+                                                                return_greeks=True)
                 adj_spot.append(adjusted_spot)
             option_prices.append(opt_price)
+            deltas.append(delta)
 
             if option_type_input.value == "Call":
                 stock_gain = S_t - strike
@@ -199,10 +207,19 @@ def setup_callbacks(controls, plot_container):
         for key in list(post_div_matrix.keys()):
             cols.append(TableColumn(field=key, title=key, formatter=html_formatter))
         post_div_table.columns = cols
+        
+        #Delta
+        py_dates_dt = [datetime.datetime.combine(datetime.date(d.year(), d.month(), d.dayOfMonth()), datetime.time.min) for d in dates[:len(deltas)]]
+        p_delta = figure(title="Delta vs Time", x_axis_type="datetime", width=800, height=300)
+        p_delta.line(py_dates_dt, deltas, color="orange", line_width=2, legend_label="Delta")
+        p_delta.circle(py_dates_dt, deltas, color="orange", size=3)
+        p_delta.xaxis.axis_label = "Time"
+        p_delta.yaxis.axis_label = "Delta"
+        p_delta.legend.location = "top_left"
 
         # -------- Layout
         plots_column = column(p3, p, p2)
-        table_column = column(table_toggle_button, data_table, post_div_table)
+        table_column = column(table_toggle_button, data_table, post_div_table, p_delta)
         plot_container.children = [row(plots_column, table_column)]
 
     start_button.on_click(start_calculation)
