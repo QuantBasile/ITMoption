@@ -30,6 +30,8 @@ desc_n_steps = Div(text="Roughly daily steps until maturity", width=300, visible
 desc_timeSteps = Div(text="Base number of steps in the binomial tree (CRR solver)", width=300, visible=False)
 
 # Inputs
+exercise_input = Select(title="Exercise Type", options=["european", "american"], value="american")
+option_type_input = Select(title="Option Type", options=["call", "put"], value="call")
 spot_input = Spinner(title="Spot", low=0, high=5000, step=0.01, value=95.0)
 strike_input = Spinner(title="Strike", low=0, high=5000, step=0.1, value=90.0)
 market_option_price_input = Spinner(title="Market Option Price", low=0, high=10000, step=0.1, value=12.0)
@@ -70,6 +72,8 @@ row_n_steps = column(row(n_steps_input, make_info_button(desc_n_steps)), desc_n_
 row_timeSteps = column(row(timeSteps_input, make_info_button(desc_timeSteps)), desc_timeSteps)
 
 inputs = column(
+    exercise_input,
+    option_type_input,
     row_spot, row_strike, row_market_option_price, row_r, row_div_amount, row_shock,
     row_num_stocks, row_vol_post, row_start_date, row_dividend_date,
     row_maturity_date, row_n_steps, row_timeSteps, engine_input

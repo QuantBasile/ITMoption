@@ -16,7 +16,7 @@ from .ui import (
     spot_input, strike_input, market_option_price_input, r_input, div_amount_input, shock_input,
     num_stocks_input, vol_post_input, n_steps_input, timeSteps_input, engine_input,
     start_date_input, dividend_date_input, maturity_date_input, use_single_vol_toggle,
-    start_button, vol_pre_display, plot_container
+    start_button, vol_pre_display, plot_container,  option_type_input,exercise_input
 )
 from .logic.pricing import compute_implied_vol, compute_option_price, compute_post_div_matrix
 
@@ -54,7 +54,7 @@ def setup_callbacks(controls, plot_container):
 
         vol_pre = compute_implied_vol(
             market_option_price, today, spot, strike, market_option_price, r, div_amount,
-            div_date, maturity_date, timeSteps, engine_input.value
+            div_date, maturity_date, timeSteps, engine_input.value, exercise_input.value, option_type_input.value
         )
         vol_pre_display.text = f"Initial implied volatility: {vol_pre:.4f}"
         
@@ -62,7 +62,7 @@ def setup_callbacks(controls, plot_container):
             suggested_vol = 0.2
             suggested_price, _ = compute_option_price(
                 suggested_vol, today, 0, div_date, today, spot, shock, r,
-                div_amount, strike, maturity_date, timeSteps, engine_input.value )
+                div_amount, strike, maturity_date, timeSteps, engine_input.value, exercise_input.value, option_type_input.value )
 
             vol_pre_display.text = f"Implied volatility not found. Suggested option price for implied vol=0.2: {suggested_price:.4f}"
 
@@ -95,17 +95,23 @@ def setup_callbacks(controls, plot_container):
 
             remaining_t = day_count.yearFraction(d, maturity_date)
             if remaining_t <= 1e-8:
-                opt_price = max(S_t - strike, 0.0)
+                if option_type_input.value  == "Call":
+                    opt_price = max(S_t - strike, 0.0)
+                else:
+                    opt_price = max(strike - S_t, 0.0)
                 adj_spot.append(spot)
             else:
-                opt_price, adjusted_spot_val = compute_option_price(
-                    current_vol, d, t, div_date, today, spot, shock, r, div_amount,
-                    strike, maturity_date, timeSteps, engine_input.value
-                )
-                adj_spot.append(adjusted_spot_val)
+                opt_price, adjusted_spot = compute_option_price(current_vol, d, t, div_date, 
+                                                                today, spot, shock, r, div_amount, strike, 
+                                                                maturity_date, timeSteps, engine_input.value,
+                                                                exercise_input.value, option_type_input.value )
+                adj_spot.append(adjusted_spot)
             option_prices.append(opt_price)
 
-            stock_gain = S_t - strike
+            if option_type_input.value == "Call":
+                stock_gain = S_t - strike
+            else:
+                stock_gain = strike - S_t
             stock_gains.append(stock_gain)
             discounted_div = div_amount * np.exp(-r * (div_time - t)) if d < div_date else 0.0
             discounted_dividends.append(discounted_div)
@@ -131,7 +137,7 @@ def setup_callbacks(controls, plot_container):
         p2.xaxis.axis_label = "Time"
         p2.yaxis.axis_label = "Portfolio Value"
 
-        p3 = figure(title="Option Price vs Immediate Exercise Value Over Time", x_axis_type="datetime", width=800, height=400)
+        p3 = figure(title=f"Option Price vs Immediate Exercise Value Over Time ({option_type_input.value})", x_axis_type="datetime", width=800, height=400)
         p3.line(py_dates_dt, option_prices, legend_label="Option Price", color="red")
         p3.line(py_dates_dt, immediate_exercise_values, legend_label="Immediate Exercise Value", color="blue", line_dash="dashed")
         p3.xaxis.axis_label = "Time"
@@ -184,7 +190,8 @@ def setup_callbacks(controls, plot_container):
 
         # -------- Post Dividend Matrix Table
         post_div_matrix = compute_post_div_matrix(
-            today, spot, shock, r, div_amount, strike, maturity_date, timeSteps, vol_pre, div_date
+            today, spot, shock, r, div_amount, strike, maturity_date, timeSteps, vol_pre, div_date,
+            exercise_input.value, option_type_input.value
         )
         post_div_source.data = post_div_matrix
         cols = []

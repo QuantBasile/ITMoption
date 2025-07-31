@@ -99,7 +99,7 @@ def compute_option_price(vol, eval_date, t, div_date, today, spot, shock, r, div
     return option.NPV(), adjusted_spot.value()
 
 def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, maturity_date, timeSteps, 
-                            vol_pre, div_date):
+                            vol_pre, div_date, exercise_type="american",option_type="call"):
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
     implied_volas = np.arange(0.10, 0.85, 0.05)
@@ -119,7 +119,7 @@ def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, matur
         for S in underlying_values:
             option_price, _ = compute_option_price(
                 vol, eval_date, 0, eval_date, eval_date, S, shock, r, div_amount,
-                strike, maturity_date, timeSteps, "CRR"
+                strike, maturity_date, timeSteps, "CRR", exercise_type, option_type
             )
             prices.append(f"{option_price:8.2f}")
         matrix_data[col_key] = prices
