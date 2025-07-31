@@ -57,6 +57,18 @@ def setup_callbacks(controls, plot_container):
             div_date, maturity_date, timeSteps, engine_input.value
         )
         vol_pre_display.text = f"Initial implied volatility: {vol_pre:.4f}"
+        
+        if np.isnan(vol_pre):
+            suggested_vol = 0.2
+            suggested_price, _ = compute_option_price(
+                suggested_vol, today, 0, div_date, today, spot, shock, r,
+                div_amount, strike, maturity_date, timeSteps, engine_input.value )
+
+            vol_pre_display.text = f"Implied volatility not found. Suggested option price for implied vol=0.2: {suggested_price:.4f}"
+
+            return  # This exits the function cleanly
+       
+        
 
         dates = []
         underlying_prices = []
