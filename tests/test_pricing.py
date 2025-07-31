@@ -21,12 +21,11 @@ day_count = ql.Actual365Fixed()
 @pytest.mark.parametrize("eval_offset", range(0, 101, 30))
 @pytest.mark.parametrize("r", np.arange(0, 0.2, 0.05))
 @pytest.mark.parametrize("vol", np.arange(0.1, 0.5, 0.15))
-@pytest.mark.parametrize("model", ["cont", "lin"])
 @pytest.mark.parametrize("div_amount", [0,  5])
 @pytest.mark.parametrize("shock", [0, 10])
 @pytest.mark.parametrize("div_offset_days", [0, 100,10000])
 @pytest.mark.parametrize("option_type", ["put","call"])
-def test_compute_option_price(eval_offset, r, vol,   model, div_amount, shock, div_offset_days,option_type):
+def test_compute_option_price(eval_offset, r, vol,  div_amount, shock, div_offset_days,option_type):
     timeSteps=1000
     engine="CRR"
     spot = 100
@@ -39,14 +38,14 @@ def test_compute_option_price(eval_offset, r, vol,   model, div_amount, shock, d
     if eval_date > maturity_date or div_date > maturity_date:
         with pytest.raises(ValueError):
             compute_option_price(
-                vol, eval_date, day_count.yearFraction(today, eval_date), div_date, model, today, spot, shock, r,
+                vol, eval_date, day_count.yearFraction(today, eval_date), div_date, today, spot, shock, r,
                 div_amount, strike, maturity_date, timeSteps, engine, exercise_type="european", option_type=option_type
             )
         return
     
     else:
         price, adj_spot = compute_option_price(
-            vol, eval_date, t, div_date, model, today, spot, shock, r,
+            vol, eval_date, t, div_date, today, spot, shock, r,
             div_amount, strike, maturity_date, timeSteps, engine, exercise_type="european", option_type=option_type
         )
 
@@ -66,7 +65,7 @@ def test_compute_option_price(eval_offset, r, vol,   model, div_amount, shock, d
         print(f"[Analytic] eval_offset={eval_offset}, price={price:.4f}, bs={bs_price:.4f}")
         assert abs(price - bs_price) < 0.5
     else:
-        print(f"[Binomial] eval_offset={eval_offset}, price={price:.4f}, model={model}, div={div_amount}, shock={shock}")
+        print(f"[Binomial] eval_offset={eval_offset}, price={price:.4f}, div={div_amount}, shock={shock}")
         assert price > 0
 
 
@@ -77,9 +76,8 @@ def test_compute_option_price(eval_offset, r, vol,   model, div_amount, shock, d
 @pytest.mark.parametrize("vol", [0.15, 0.2, 0.3,0.4,0.5])
 @pytest.mark.parametrize("div_amount", [0.0])
 @pytest.mark.parametrize("shock", [0.0])
-@pytest.mark.parametrize("model", ["cont","lin"])
 @pytest.mark.parametrize("eval_offset_days", [0, 50])
-def test_implied_vol_parametric(option_type, spot, strike, r, vol, div_amount, shock, model, eval_offset_days):
+def test_implied_vol_parametric(option_type, spot, strike, r, vol, div_amount, shock,  eval_offset_days):
     moneyness = spot / strike
     deep_ITM_OTM = False
     if option_type == "call" and (moneyness > 1.15 or moneyness < 0.85):
@@ -107,7 +105,7 @@ def test_implied_vol_parametric(option_type, spot, strike, r, vol, div_amount, s
 
     # 1. Generate a theoretical option price with known vol
     price, _ = compute_option_price(
-        vol, eval_date, t, div_date, model, today, spot, shock, r,
+        vol, eval_date, t, div_date, today, spot, shock, r,
         div_amount, strike, maturity_date, timeSteps, engine,
         exercise_type="european", option_type=option_type
     )
@@ -121,36 +119,77 @@ def test_implied_vol_parametric(option_type, spot, strike, r, vol, div_amount, s
         div_date, maturity_date, timeSteps, engine, exercise_type="european",option_type=option_type
     )
 
-    print(f"type={option_type}, spot={spot}, strike={strike}, r={r}, vol={vol}, div_amount={div_amount}, shock={shock}, model={model}, eval_offset={eval_offset_days} | price={price:.4f} | implied_vol={implied_vol:.4f}")
+    print(f"type={option_type}, spot={spot}, strike={strike}, r={r}, vol={vol}, div_amount={div_amount}, shock={shock},  eval_offset={eval_offset_days} | price={price:.4f} | implied_vol={implied_vol:.4f}")
 
     assert abs(implied_vol - vol) < 0.06  # Within 2% error
 
 
-# def test_option_price_dividends():
-#     # Test a dividend scenario: option price should decrease
-#     spot = 100
-#     strike = 90
-#     vol = 0.25
-#     r = 0.03
-#     div_amount = 5.0
-#     shock = 0.0
-#     today = ql.Date(1, 1, 2025)
-#     eval_date = today
-#     maturity_date = ql.Date(1, 7, 2025)
-#     div_date = ql.Date(1, 4, 2025)
-#     t = 0.0
-#     model = "cont"
-#     timeSteps = 150
-#     engine = "CRR"
-#     # With dividend
-#     price_with_div, _ = compute_option_price(
-#         vol, eval_date, t, div_date, model, today, spot, shock, r,
-#         div_amount, strike, maturity_date, timeSteps, engine
-#     )
-#     # No dividend
-#     price_no_div, _ = compute_option_price(
-#         vol, eval_date, t, div_date, model, today, spot, shock, r,
-#         0.0, strike, maturity_date, timeSteps, engine
-#     )
-#     assert price_with_div < price_no_div
+@pytest.mark.parametrize("option_type", ["call", "put"])
+@pytest.mark.parametrize("div_amount", [1, 5, 10])
+@pytest.mark.parametrize("spot", [80, 100, 120])
+@pytest.mark.parametrize("strike", [80, 100, 120])
+@pytest.mark.parametrize("r", [0.01, 0.05])
+@pytest.mark.parametrize("vol", [0.15, 0.2, 0.3])
+@pytest.mark.parametrize("shock", [0.0, 0])
+@pytest.mark.parametrize("eval_offset_days", [0, 50])
+@pytest.mark.parametrize("div_offset_days", [30, 100, 200])
+def test_option_price_dividends(
+    option_type, div_amount, spot, strike, r, vol, shock, eval_offset_days, div_offset_days
+):
+    today = ql.Date(1, 1, 2025)
+    eval_date = today + eval_offset_days
+    maturity_date = ql.Date(1, 1, 2026)
+    div_date = today + div_offset_days
+    t = day_count.yearFraction(today, eval_date)
+    timeSteps = 1000
+    engine = "CRR"
+
+    # Saltar fechas inválidas
+    if eval_date > maturity_date or div_date > maturity_date:
+        pytest.skip("Invalid test case: eval_date or div_date after maturity")
+        return
+
+    # Deep ITM/OTM moneyness
+    moneyness = spot / strike
+    if option_type == "call" and (moneyness > 1.15 or moneyness < 0.85):
+        pytest.skip(f"Call deep ITM/OTM (moneyness={moneyness:.2f})")
+        return
+    if option_type == "put" and (moneyness < 0.85 or moneyness > 1.15):
+        pytest.skip(f"Put deep ITM/OTM (moneyness={moneyness:.2f})")
+        return
+
+    # Precios con y sin dividendo
+    price_no_div, _ = compute_option_price(
+        vol, eval_date, t, div_date, today, spot, shock, r,
+        0.0, strike, maturity_date, timeSteps, engine,
+        exercise_type="european", option_type=option_type
+    )
+    price_with_div, _ = compute_option_price(
+        vol, eval_date, t, div_date, today, spot, shock, r,
+        div_amount, strike, maturity_date, timeSteps, engine,
+        exercise_type="european", option_type=option_type
+    )
+
+    # Salta precios bajos (opción sin valor o numéricamente inestable)
+    min_price_threshold = 0.1
+    if price_no_div < min_price_threshold or price_with_div < min_price_threshold:
+        pytest.skip(f"Option price too small (no_div={price_no_div:.4f}, with_div={price_with_div:.4f})")
+        return
+
+    print(f"type={option_type}, spot={spot}, strike={strike}, r={r}, vol={vol}, "
+          f"div_amount={div_amount}, shock={shock}, eval_offset={eval_offset_days}, "
+          f"div_offset={div_offset_days} | price_no_div={price_no_div:.4f}, price_with_div={price_with_div:.4f}")
+
+    # Test robusto:
+    if option_type == "call":
+        assert price_with_div < price_no_div - 1e-6, (
+            f"Call: Price did not decrease with dividend. "
+            f"no_div={price_no_div:.4f}, with_div={price_with_div:.4f}"
+        )
+    elif option_type == "put":
+        # Permite igual o subir (subida puede ser mínima en el borde)
+        assert price_with_div > price_no_div - 1e-6, (
+            f"Put: Price did not increase (or remain) with dividend. "
+            f"no_div={price_no_div:.4f}, with_div={price_with_div:.4f}"
+        )
 

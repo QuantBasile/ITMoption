@@ -48,7 +48,7 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
     except RuntimeError:
         return np.nan
 
-def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock, r, div_amount, strike, 
+def compute_option_price(vol, eval_date, t, div_date, today, spot, shock, r, div_amount, strike, 
                          maturity_date, timeSteps, engine, exercise_type="american",option_type="call"):
     
     if eval_date > maturity_date:
@@ -60,7 +60,7 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
     calendar = ql.TARGET()
     day_count = ql.Actual365Fixed()
     if eval_date < div_date:
-        if model == "cont":
+        if 1 == 1:
             factor_div = 1 / day_count.dayCount(eval_date, div_date)**2
         else:
             factor_div = 1 - day_count.dayCount(eval_date, div_date) / day_count.dayCount(today, div_date)
@@ -73,7 +73,7 @@ def compute_option_price(vol, eval_date, t, div_date, model, today, spot, shock,
     )
     adjusted_spot = ql.SimpleQuote(adjusted_spot_value)
     vol_curve = ql.BlackConstantVol(eval_date, calendar, vol, day_count)
-    print(vol)
+    #print(vol)
     bs_process = ql.BlackScholesMertonProcess(
         ql.QuoteHandle(adjusted_spot),
         ql.YieldTermStructureHandle(ql.FlatForward(eval_date, 0.0, day_count)),
@@ -118,7 +118,7 @@ def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, matur
         prices = []
         for S in underlying_values:
             option_price, _ = compute_option_price(
-                vol, eval_date, 0, eval_date, "cont", eval_date, S, shock, r, div_amount,
+                vol, eval_date, 0, eval_date, eval_date, S, shock, r, div_amount,
                 strike, maturity_date, timeSteps, "CRR"
             )
             prices.append(f"{option_price:8.2f}")

@@ -14,7 +14,7 @@ import numpy as np
 import QuantLib as ql
 from .ui import (
     spot_input, strike_input, market_option_price_input, r_input, div_amount_input, shock_input,
-    num_stocks_input, vol_post_input, model_input, n_steps_input, timeSteps_input, engine_input,
+    num_stocks_input, vol_post_input, n_steps_input, timeSteps_input, engine_input,
     start_date_input, dividend_date_input, maturity_date_input, use_single_vol_toggle,
     start_button, vol_pre_display, plot_container
 )
@@ -38,7 +38,7 @@ def setup_callbacks(controls, plot_container):
         shock = shock_input.value
         num_stocks = num_stocks_input.value
         vol_post = vol_post_input.value
-        model = model_input.value
+        #model = model_input.value
         n_steps = n_steps_input.value
         timeSteps = timeSteps_input.value
         start_date = start_date_input.value
@@ -87,7 +87,7 @@ def setup_callbacks(controls, plot_container):
                 adj_spot.append(spot)
             else:
                 opt_price, adjusted_spot_val = compute_option_price(
-                    current_vol, d, t, div_date, model, today, spot, shock, r, div_amount,
+                    current_vol, d, t, div_date, today, spot, shock, r, div_amount,
                     strike, maturity_date, timeSteps, engine_input.value
                 )
                 adj_spot.append(adjusted_spot_val)
