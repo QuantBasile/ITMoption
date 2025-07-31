@@ -49,7 +49,8 @@ def compute_implied_vol(target_price, eval_date, spot, strike, market_option_pri
         return np.nan
 
 def compute_option_price(vol, eval_date, t, div_date, today, spot, shock, r, div_amount, strike, 
-                         maturity_date, timeSteps, engine, exercise_type="american",option_type="call"):
+                         maturity_date, timeSteps, engine, exercise_type="american",option_type="call",
+                         return_greeks=False):
     
     if eval_date > maturity_date:
         raise ValueError("Evaluation date (eval_date) cannot be after option maturity.")
@@ -95,8 +96,17 @@ def compute_option_price(vol, eval_date, t, div_date, today, spot, shock, r, div
     else:
         raise ValueError("Unknown exercise_type")
     option = ql.VanillaOption(payoff, exercise)
-    option.setPricingEngine(getattr(ql, 'BinomialVanillaEngine')(bs_process, engine, timeSteps))
-    return option.NPV(), adjusted_spot.value()
+    option.setPricingEngine(getattr(ql, 'BinomialVanillaEngine')(bs_process, engine, timeSteps)) #valid for both
+    
+    if return_greeks:
+        try:
+            delta = option.delta()
+        except RuntimeError:
+            delta = float('nan')
+        return option.NPV(), adjusted_spot.value(), delta
+    else:
+        return option.NPV(), adjusted_spot.value()
+ 
 
 def compute_post_div_matrix(eval_date, spot, shock, r, div_amount, strike, maturity_date, timeSteps, 
                             vol_pre, div_date, exercise_type="american",option_type="call"):

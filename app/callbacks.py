@@ -28,6 +28,7 @@ def setup_callbacks(controls, plot_container):
     table_toggle_button = Button(label="Show Full Table", button_type="primary", width=200)
     post_div_source = ColumnDataSource(data={"IV ↓ / Spot →": []})
     post_div_table = DataTable(source=post_div_source, columns=[], width=1200, height=400)
+       
 
     def start_calculation():
         spot = spot_input.value
