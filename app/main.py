@@ -14,3 +14,4 @@ setup_callbacks(controls, plot_container)
 layout = row(controls, plot_container)
 curdoc().add_root(layout)
 
+#okeh serve app/ to execute app
