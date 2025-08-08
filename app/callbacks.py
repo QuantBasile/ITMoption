@@ -9,6 +9,7 @@ from bokeh.layouts import column, row
 from bokeh.models import (
     ColumnDataSource, DataTable, TableColumn, Button, HTMLTemplateFormatter
 )
+from bokeh.models import LinearAxis, Range1d
 import datetime
 import numpy as np
 import QuantLib as ql
@@ -82,6 +83,8 @@ def setup_callbacks(controls, plot_container):
         discounted_dividends = []
         stock_gains = []
         deltas = []
+        gammas = []
+        thetas = []
 
 
         for i in range(n_steps + 1):
@@ -100,6 +103,8 @@ def setup_callbacks(controls, plot_container):
 
             remaining_t = day_count.yearFraction(d, maturity_date)
             if remaining_t <= 1e-8:
+                gamma = 0.0
+                theta = 0.0 
                 if option_type_input.value  == "Call":
                     opt_price = max(S_t - strike, 0.0)
                     delta = 1.0 if S_t > strike else 0.0
@@ -108,7 +113,8 @@ def setup_callbacks(controls, plot_container):
                     delta = -1.0 if S_t < strike else 0.0
                 adj_spot.append(spot)
             else:
-                opt_price, adjusted_spot,delta = compute_option_price(current_vol, d, t, div_date, 
+                opt_price, adjusted_spot,delta,gamma, theta = compute_option_price(
+                                                                current_vol, d, t, div_date, 
                                                                 today, spot, shock, r, div_amount, strike, 
                                                                 maturity_date, timeSteps, engine_input.value,
                                                                 exercise_input.value, option_type_input.value,
@@ -116,6 +122,8 @@ def setup_callbacks(controls, plot_container):
                 adj_spot.append(adjusted_spot)
             option_prices.append(opt_price)
             deltas.append(delta)
+            gammas.append(gamma*10)
+            thetas.append(theta)
 
             if option_type_input.value == "Call":
                 stock_gain = S_t - strike
@@ -208,18 +216,38 @@ def setup_callbacks(controls, plot_container):
             cols.append(TableColumn(field=key, title=key, formatter=html_formatter))
         post_div_table.columns = cols
         
-        #Delta
+        #Delta - greeks
         py_dates_dt = [datetime.datetime.combine(datetime.date(d.year(), d.month(), d.dayOfMonth()), datetime.time.min) for d in dates[:len(deltas)]]
-        p_delta = figure(title="Delta vs Time", x_axis_type="datetime", width=800, height=300)
-        p_delta.line(py_dates_dt, deltas, color="orange", line_width=2, legend_label="Delta")
-        p_delta.circle(py_dates_dt, deltas, color="orange", size=3)
-        p_delta.xaxis.axis_label = "Time"
-        p_delta.yaxis.axis_label = "Delta"
-        p_delta.legend.location = "top_left"
+        p_greeks = figure(title="Greeks vs Time", x_axis_type="datetime", width=800, height=350)
+        
+        # Fix left y-axis to -1 to 1
+        p_greeks.y_range = Range1d(-1.05, 1.05)
+        
+        p_greeks.line(py_dates_dt, deltas, color="orange", line_width=2, legend_label="Delta")
+        p_greeks.circle(py_dates_dt, deltas, color="orange", size=3)
+
+        p_greeks.line(py_dates_dt, gammas, color="blue", line_width=2, legend_label="Gammax10")
+        p_greeks.circle(py_dates_dt, gammas, color="blue", size=3)
+
+        p_greeks.yaxis.axis_label = "Delta / Gamma"
+
+        # Theta (right y-axis)
+        p_greeks.extra_y_ranges = {"theta": Range1d(start=min(thetas)*1.1, end=-min(thetas)*1.1)}
+        p_greeks.add_layout(LinearAxis(y_range_name="theta", axis_label="Theta"), 'right')
+        p_greeks.line(py_dates_dt, thetas, color="green", line_width=2, legend_label="Theta", y_range_name="theta")
+        p_greeks.circle(py_dates_dt, thetas, color="green", size=3, y_range_name="theta")
+
+        # Style
+        p_greeks.legend.location = "top_left"
+        p_greeks.grid.visible = True
+        
 
         # -------- Layout
         plots_column = column(p3, p, p2)
-        table_column = column(table_toggle_button, data_table, post_div_table, p_delta)
+        # -------- Layout
+        plots_column = column(p3, p, p2)
+        table_column = column(table_toggle_button, data_table, post_div_table, p_greeks)
         plot_container.children = [row(plots_column, table_column)]
-
+        
+        
     start_button.on_click(start_calculation)
