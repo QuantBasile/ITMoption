@@ -43,7 +43,7 @@ def test_delta_vs_fd(eval_offset, maturity_offset, r, vol, div_offset_days, opti
     timeSteps = 200
 
     # QuantLib delta
-    price, adj_spot, ql_delta = compute_option_price(
+    price, adj_spot, ql_delta, _, _ = compute_option_price(
         vol, eval_date, t, div_date, today, spot, shock, r, div_amount, strike, 
         maturity_date, timeSteps, engine, 
         exercise_type=exercise_type, option_type=option_type, return_greeks=True
@@ -68,3 +68,48 @@ def test_delta_vs_fd(eval_offset, maturity_offset, r, vol, div_offset_days, opti
 
     # Accept small numerical difference (binomial, FD, etc)
     assert np.isclose(ql_delta, fd_delta, rtol=0, atol=3-2)
+
+
+@pytest.mark.parametrize("eval_offset", range(0, 101, 30))
+@pytest.mark.parametrize("maturity_offset", [180, 365])
+@pytest.mark.parametrize("r", np.arange(0, 0.2, 0.05))
+@pytest.mark.parametrize("vol", np.arange(0.1, 0.5, 0.15))
+@pytest.mark.parametrize("div_offset_days", [0, 100, 10000])
+@pytest.mark.parametrize("option_type", ["put", "call"])
+@pytest.mark.parametrize("exercise_type", ["european", "american"])
+def test_gamma_vs_fd(eval_offset, maturity_offset, r, vol, div_offset_days, option_type, exercise_type):
+    spot = 100
+    strike = 100
+    div = 0.0
+    today = ql.Date(1, 8, 2025)
+    eval_date = today + eval_offset
+    div_date = today + div_offset_days
+    maturity_date = today + maturity_offset
+
+    if eval_date > maturity_date or div_date > maturity_date:
+        pytest.skip("Invalid: eval_date/div_date after maturity.")
+ 
+    t = ql.Actual365Fixed().yearFraction(today, eval_date)
+    engine = "CRR"
+    timeSteps = 200
+
+    price, adj_spot, _, gamma, _ = compute_option_price(
+        vol, eval_date, t, div_date, today, spot, 0, r, div, strike,
+        maturity_date, timeSteps, engine,
+        exercise_type=exercise_type, option_type=option_type, return_greeks=True
+    )
+
+    eps = 0.01 * spot
+    price_up, _,  = compute_option_price(
+        vol, eval_date, t, div_date, today, spot + eps, 0, r, div, strike,
+        maturity_date, timeSteps, engine, exercise_type, option_type, return_greeks=False
+    )
+    price_down, _, = compute_option_price(
+        vol, eval_date, t, div_date, today, spot - eps, 0, r, div, strike,
+        maturity_date, timeSteps, engine, exercise_type, option_type, return_greeks=False
+    )
+    fd_gamma = (price_up - 2 * price + price_down) / (eps ** 2)
+
+    print(f"\nGamma: {option_type}-{exercise_type}, eval+{eval_offset}, mat+{maturity_offset}, r={r:.2f}, vol={vol:.2f}, div+{div_offset_days} | QL={gamma:.4f}, FD={fd_gamma:.4f}, Diff={gamma - fd_gamma:.2e}")
+    assert np.isclose(gamma, fd_gamma, rtol=0.0, atol=1e-1)
+

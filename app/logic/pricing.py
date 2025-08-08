@@ -103,7 +103,15 @@ def compute_option_price(vol, eval_date, t, div_date, today, spot, shock, r, div
             delta = option.delta()
         except RuntimeError:
             delta = float('nan')
-        return option.NPV(), adjusted_spot.value(), delta
+        try:
+            gamma = option.gamma()
+        except RuntimeError:
+            gamma = float('nan')
+        try:
+            theta = option.theta()
+        except RuntimeError:
+            theta = float('nan')
+        return option.NPV(), adjusted_spot.value(), delta, gamma, theta
     else:
         return option.NPV(), adjusted_spot.value()
  
